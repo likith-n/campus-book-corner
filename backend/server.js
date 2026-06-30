@@ -27,7 +27,7 @@ app.use('/api/', limiter);
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:8080',
+  origin: process.env.NODE_ENV === 'production' ? true : (process.env.FRONTEND_URL || 'http://localhost:8080'),
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -112,32 +112,21 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:8080';
 testConnection().then((connected) => {
   if (!connected) {
     console.error('\n❌ Could not connect to MySQL database!');
-    console.error('   Make sure MySQL is running and the .env credentials are correct.');
     console.error('   DB_HOST:', process.env.DB_HOST);
     console.error('   DB_USER:', process.env.DB_USER);
     console.error('   DB_NAME:', process.env.DB_NAME);
     process.exit(1);
   }
-});
 
-app.listen(PORT, () => {
-  console.log('\n🚀 BookShare API Server Started');
-  console.log('================================');
-  console.log(`📡 Server: http://localhost:${PORT}`);
-  console.log(`🌍 Environment: ${NODE_ENV}`);
-  console.log(`💾 Database: ${DB_NAME}`);
-  console.log(`🔗 Frontend: ${FRONTEND_URL}`);
-  console.log('================================\n');
-  console.log('Available Routes:');
-  console.log('  POST   /api/auth/register');
-  console.log('  POST   /api/auth/login');
-  console.log('  GET    /api/auth/me');
-  console.log('  GET    /api/listings');
-  console.log('  POST   /api/listings');
-  console.log('  GET    /api/requests/sent');
-  console.log('  GET    /api/requests/received');
-  console.log('  GET    /api/users/:id');
-  console.log('\nPress Ctrl+C to stop\n');
+  app.listen(PORT, () => {
+    console.log('\n🚀 BookShare API Server Started');
+    console.log('================================');
+    console.log(`📡 Server: http://localhost:${PORT}`);
+    console.log(`🌍 Environment: ${NODE_ENV}`);
+    console.log(`💾 Database: ${DB_NAME}`);
+    console.log(`🔗 Frontend: ${FRONTEND_URL}`);
+    console.log('================================\n');
+  });
 });
 
 export default app;
