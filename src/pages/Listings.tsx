@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { mockBooks } from "@/data/mockData";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { SortOption } from "@/types";
 import ListingCard from "@/components/common/ListingCard";
 import SearchBar from "@/components/common/SearchBar";
@@ -10,26 +10,70 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Filter, X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { listingsAPI } from "@/services/api";
+import { getImageUrl } from "@/lib/getImageUrl";
+import { toast } from "sonner";
 
 const Listings = () => {
-  const [sortBy, setSortBy] = useState<SortOption>("newest");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [listings, setListings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  
+  const [sortBy, setSortBy] = useState<SortOption>(searchParams.get('sortBy') as SortOption || "newest");
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
   const [priceRange, setPriceRange] = useState([0, 1000]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || "");
 
   const subjects = ["Computer Science", "Chemistry", "Mechanical Engineering", "Electrical Engineering", "Biology"];
   const conditions = ["new", "good", "fair"];
 
+  // Fetch listings whenever filters change
+  useEffect(() => {
+    fetchListings();
+  }, [sortBy, selectedSubjects, selectedConditions, priceRange, searchQuery]);
+
+  const fetchListings = async () => {
+    setLoading(true);
+    try {
+      const params: any = {
+        sortBy,
+        limit: 50
+      };
+
+      if (searchQuery) params.search = searchQuery;
+      if (selectedSubjects.length > 0) params.subject = selectedSubjects[0]; // API accepts one subject
+      if (selectedConditions.length > 0) params.condition = selectedConditions[0]; // API accepts one condition
+      if (priceRange[0] > 0) params.priceMin = priceRange[0];
+      if (priceRange[1] < 1000) params.priceMax = priceRange[1];
+
+      console.log('📚 Fetching listings with params:', params);
+      
+      const result = await listingsAPI.getAll(params);
+      
+      if (result.success) {
+        setListings(result.data.listings);
+        setTotal(result.data.pagination.total);
+        console.log('✅ Fetched', result.data.listings.length, 'listings');
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to fetch listings:', error);
+      toast.error('Failed to load listings. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleSubject = (subject: string) => {
     setSelectedSubjects(prev =>
-      prev.includes(subject) ? prev.filter(s => s !== subject) : [...prev, subject]
+      prev.includes(subject) ? prev.filter(s => s !== subject) : [subject] // Only one at a time
     );
   };
 
   const toggleCondition = (condition: string) => {
     setSelectedConditions(prev =>
-      prev.includes(condition) ? prev.filter(c => c !== condition) : [...prev, condition]
+      prev.includes(condition) ? prev.filter(c => c !== condition) : [condition] // Only one at a time
     );
   };
 
@@ -38,6 +82,18 @@ const Listings = () => {
     setSelectedConditions([]);
     setPriceRange([0, 1000]);
     setSearchQuery("");
+    setSortBy("newest");
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    // Update URL params
+    if (query) {
+      searchParams.set('search', query);
+    } else {
+      searchParams.delete('search');
+    }
+    setSearchParams(searchParams);
   };
 
   const FilterPanel = () => (
@@ -112,12 +168,12 @@ const Listings = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="mb-4 text-3xl font-bold md:text-4xl">Browse Books</h1>
-        <SearchBar onSearch={setSearchQuery} />
+        <SearchBar onSearch={handleSearch} defaultValue={searchQuery} />
       </div>
 
       <div className="flex items-center justify-between mb-6">
         <p className="text-sm text-muted-foreground">
-          Showing {mockBooks.length} books
+          {loading ? 'Loading...' : `Showing ${listings.length} of ${total} books`}
         </p>
         
         <div className="flex items-center gap-4">
@@ -163,11 +219,55 @@ const Listings = () => {
 
         {/* Listings Grid */}
         <div className="flex-1">
-          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            {mockBooks.map((book) => (
-              <ListingCard key={book.id} book={book} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="h-96 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : listings.length > 0 ? (
+            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              {listings.map((listing) => {
+                let imageUrl = '/placeholder.svg';
+                if (listing.image_urls) {
+                  try {
+                    const images = JSON.parse(listing.image_urls);
+                    imageUrl = getImageUrl(images[0]);
+                  } catch {
+                    imageUrl = '/placeholder.svg';
+                  }
+                }
+                
+                return (
+                  <ListingCard 
+                    key={listing.listing_id} 
+                    book={{
+                      id: listing.listing_id.toString(),
+                      title: listing.title,
+                      author: listing.author,
+                      edition: listing.edition || '',
+                      subject: listing.subject,
+                      condition: listing.condition_type,
+                      price: parseFloat(listing.price),
+                      description: listing.listing_description || '',
+                      images: [imageUrl],
+                      ownerId: listing.owner_id.toString(),
+                      ownerName: listing.owner_name,
+                      ownerRating: listing.owner_rating || 0,
+                      createdAt: listing.created_at
+                    }} 
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">No books found matching your filters.</p>
+              <Button onClick={clearFilters} variant="outline">
+                Clear Filters
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

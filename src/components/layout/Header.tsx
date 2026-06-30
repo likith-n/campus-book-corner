@@ -1,7 +1,9 @@
-import { Link, useLocation } from "react-router-dom";
-import { BookOpen, User, Menu, Moon, Sun } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { BookOpen, User, Menu, Moon, Sun, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
+import { authAPI } from "@/services/api";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,8 +13,22 @@ import {
 
 const Header = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isDark, setIsDark] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        setUser(JSON.parse(userData));
+      } catch (e) {
+        console.error('Error parsing user data:', e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const isDarkMode = document.documentElement.classList.contains("dark");
@@ -30,6 +46,13 @@ const Header = () => {
   };
 
   const isActive = (path: string) => location.pathname === path;
+
+  const handleLogout = () => {
+    authAPI.logout();
+    setUser(null);
+    toast.success('Logged out successfully');
+    navigate('/');
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -85,24 +108,43 @@ const Header = () => {
             {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="hidden md:inline-flex">
-                <User className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem asChild>
-                <Link to="/profile/1" className="cursor-pointer">My Profile</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/login" className="cursor-pointer">Login</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/signup" className="cursor-pointer">Sign Up</Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="hidden md:inline-flex">
+                  <User className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <div className="px-2 py-1.5 text-sm font-medium">
+                  {user.name || user.user?.name}
+                </div>
+                <DropdownMenuItem asChild>
+                  <Link to={`/profile/${user.user_id || user.userId}`} className="cursor-pointer">My Profile</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="hidden md:inline-flex">
+                  <User className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link to="/login" className="cursor-pointer">Login</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/signup" className="cursor-pointer">Sign Up</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {/* Mobile Menu */}
           <Button

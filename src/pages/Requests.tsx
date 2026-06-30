@@ -1,135 +1,540 @@
-import { useState } from "react";
-import { mockRequests } from "@/data/mockData";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, Clock, MessageCircle } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { 
+  Clock, 
+  CheckCircle, 
+  XCircle, 
+  MessageSquare, 
+  MapPin, 
+  Calendar,
+  Send,
+  Loader2,
+  BookOpen,
+  User
+} from "lucide-react";
+import { requestsAPI } from "@/services/api";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
+import { format } from "date-fns";
+
+interface Request {
+  request_id: number;
+  listing_id: number;
+  requester_id: number;
+  owner_id: number;
+  book_title: string;
+  book_author: string;
+  book_edition?: string;
+  price: number;
+  condition_type: string;
+  message: string | null;
+  status: 'pending' | 'accepted' | 'rejected' | 'completed' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+  requester_name?: string;
+  requester_email?: string;
+  requester_phone?: string;
+  requester_rating?: number;
+  requester_location?: string;
+  owner_name?: string;
+  owner_rating?: number;
+  owner_location?: string;
+}
 
 const Requests = () => {
-  const [activeTab, setActiveTab] = useState("sent");
+  const { user, isAuthenticated } = useAuth();
+  const [activeTab, setActiveTab] = useState<'received' | 'sent'>('received');
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedRequest, setSelectedRequest] = useState<Request | null>(null);
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [actionType, setActionType] = useState<'accept' | 'reject' | 'cancel'>('accept');
+  const [responseMessage, setResponseMessage] = useState('');
+  const [meetingDetails, setMeetingDetails] = useState({
+    location: '',
+    time: '',
+    notes: ''
+  });
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const sentRequests = mockRequests.filter(r => r.requesterId === "1");
-  const receivedRequests = mockRequests.filter(r => r.ownerId === "1");
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchRequests();
+    }
+  }, [isAuthenticated, activeTab]);
 
-  const statusColors = {
-    pending: { bg: "bg-secondary", icon: Clock, text: "Pending" },
-    accepted: { bg: "bg-success", icon: CheckCircle2, text: "Accepted" },
-    rejected: { bg: "bg-destructive", icon: XCircle, text: "Rejected" },
-    completed: { bg: "bg-primary", icon: CheckCircle2, text: "Completed" },
+  const fetchRequests = async () => {
+    setLoading(true);
+    try {
+      const result = activeTab === 'received' 
+        ? await requestsAPI.getReceived()
+        : await requestsAPI.getSent();
+      
+      console.log('📥 Requests result:', result);
+      
+      if (result.success) {
+        setRequests(result.data || []);
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch requests:', error);
+      toast.error('Failed to load requests');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const RequestCard = ({ request, type }: { request: typeof mockRequests[0], type: "sent" | "received" }) => {
-    const status = statusColors[request.status];
-    const StatusIcon = status.icon;
+  const handleAccept = async () => {
+    if (!selectedRequest) return;
+    
+    if (!meetingDetails.location || !meetingDetails.time) {
+      toast.error('Please provide meeting location and time');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const result = await requestsAPI.accept(selectedRequest.request_id);
+
+      if (result.success) {
+        toast.success('Request accepted! Buyer will be notified.');
+        setActionDialogOpen(false);
+        fetchRequests();
+        resetDialogState();
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to accept request');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selectedRequest) return;
+
+    setActionLoading(true);
+    try {
+      const result = await requestsAPI.reject(selectedRequest.request_id);
+
+      if (result.success) {
+        toast.success('Request rejected');
+        setActionDialogOpen(false);
+        fetchRequests();
+        resetDialogState();
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to reject request');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!selectedRequest) return;
+
+    setActionLoading(true);
+    try {
+      const result = await requestsAPI.cancel(selectedRequest.request_id);
+
+      if (result.success) {
+        toast.success('Request cancelled');
+        setActionDialogOpen(false);
+        fetchRequests();
+        resetDialogState();
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to cancel request');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleComplete = async (requestId: number) => {
+    // Get the request details to get the price
+    const request = requests.find(r => r.request_id === requestId);
+    if (!request) return;
+
+    setActionLoading(true);
+    try {
+      const result = await requestsAPI.complete(requestId, {
+        amount: request.price,
+        payment_method: 'cash',
+        notes: 'Transaction completed'
+      });
+
+      if (result.success) {
+        toast.success('Transaction completed!');
+        fetchRequests();
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to complete transaction');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openActionDialog = (request: Request, action: 'accept' | 'reject' | 'cancel') => {
+    setSelectedRequest(request);
+    setActionType(action);
+    setActionDialogOpen(true);
+  };
+
+  const resetDialogState = () => {
+    setSelectedRequest(null);
+    setResponseMessage('');
+    setMeetingDetails({ location: '', time: '', notes: '' });
+  };
+
+  const getStatusBadge = (status: string) => {
+    const variants = {
+      pending: { variant: 'secondary', icon: Clock, label: 'Pending' },
+      accepted: { variant: 'default', icon: CheckCircle, label: 'Accepted' },
+      rejected: { variant: 'destructive', icon: XCircle, label: 'Rejected' },
+      completed: { variant: 'outline', icon: CheckCircle, label: 'Completed' },
+      cancelled: { variant: 'outline', icon: XCircle, label: 'Cancelled' }
+    };
+
+    const config = variants[status as keyof typeof variants];
+    if (!config) return null;
+
+    const Icon = config.icon;
+    return (
+      <Badge variant={config.variant as any} className="flex items-center gap-1">
+        <Icon className="h-3 w-3" />
+        {config.label}
+      </Badge>
+    );
+  };
+
+  const RequestCard = ({ request }: { request: Request }) => {
+    const isReceived = activeTab === 'received';
+    const otherUser = isReceived 
+      ? { 
+          name: request.requester_name || 'Unknown', 
+          email: request.requester_email || '',
+          phone: request.requester_phone || '',
+          rating: request.requester_rating,
+          location: request.requester_location
+        }
+      : { 
+          name: request.owner_name || 'Unknown',
+          email: '',
+          phone: '',
+          rating: request.owner_rating,
+          location: request.owner_location
+        };
 
     return (
-      <Card>
-        <CardHeader>
+      <Card className="mb-4 hover:shadow-md transition-shadow">
+        <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <CardTitle className="text-lg">
-                <Link to={`/listings/${request.bookId}`} className="hover:text-primary transition-colors">
-                  {request.bookTitle}
-                </Link>
-              </CardTitle>
-              <CardDescription>
-                {type === "sent" ? `To: ${request.requesterName}` : `From: ${request.requesterName}`}
+              <CardTitle className="text-lg mb-1">{request.book_title}</CardTitle>
+              <CardDescription className="flex items-center gap-2">
+                <BookOpen className="h-3 w-3" />
+                by {request.book_author}
               </CardDescription>
             </div>
-            <Badge className={status.bg}>
-              <StatusIcon className="mr-1 h-3 w-3" />
-              {status.text}
-            </Badge>
+            {getStatusBadge(request.status)}
           </div>
         </CardHeader>
+        
         <CardContent className="space-y-4">
-          <div className="rounded-md bg-muted p-3">
-            <p className="text-sm">{request.message}</p>
+          {/* User Info */}
+          <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+            <Avatar>
+              <AvatarFallback>
+                {otherUser.name.substring(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <p className="font-medium flex items-center gap-2">
+                <User className="h-3 w-3" />
+                {otherUser.name}
+              </p>
+              <p className="text-sm text-muted-foreground">{otherUser.email}</p>
+            </div>
           </div>
-          
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{new Date(request.createdAt).toLocaleDateString()}</span>
-            
-            {type === "received" && request.status === "pending" && (
-              <div className="flex gap-2">
-                <Button size="sm" variant="default">
-                  Accept
-                </Button>
-                <Button size="sm" variant="outline">
-                  Decline
-                </Button>
+
+          {/* Book Details */}
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-muted-foreground">Price</p>
+              <p className="font-medium">₹{request.price}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Condition</p>
+              <p className="font-medium capitalize">{request.condition_type}</p>
+            </div>
+            {request.book_edition && (
+              <div>
+                <p className="text-muted-foreground">Edition</p>
+                <p className="font-medium">{request.book_edition}</p>
               </div>
             )}
-            
-            {type === "sent" && (
-              <Button size="sm" variant="ghost" className="gap-1">
-                <MessageCircle className="h-4 w-4" />
-                Chat
-              </Button>
-            )}
           </div>
+
+          {/* Message */}
+          {request.message && (
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm font-medium mb-1 flex items-center gap-2">
+                <MessageSquare className="h-3 w-3" />
+                Message
+              </p>
+              <p className="text-sm">{request.message}</p>
+            </div>
+          )}
+
+          {/* Remove meeting details section since backend doesn't have these fields yet */}
+
+          {/* Timestamp */}
+          <p className="text-xs text-muted-foreground">
+            Requested on {format(new Date(request.created_at), 'PPp')}
+          </p>
+
+          {/* Actions */}
+          {isReceived && request.status === 'pending' && (
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => openActionDialog(request, 'accept')}
+                className="flex-1"
+              >
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Accept
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openActionDialog(request, 'reject')}
+                className="flex-1"
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Reject
+              </Button>
+            </div>
+          )}
+
+          {!isReceived && request.status === 'pending' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => openActionDialog(request, 'cancel')}
+              className="w-full"
+            >
+              Cancel Request
+            </Button>
+          )}
+
+          {request.status === 'accepted' && (
+            <Button
+              size="sm"
+              onClick={() => handleComplete(request.request_id)}
+              disabled={actionLoading}
+              className="w-full"
+            >
+              Mark as Completed
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
   };
 
+  if (!isAuthenticated) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center">
+        <h2 className="text-2xl font-bold mb-4">Please Login</h2>
+        <p className="text-muted-foreground mb-6">You need to be logged in to view requests</p>
+        <Button onClick={() => window.location.href = '/login'}>Go to Login</Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8 animate-fade-in">
+    <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="mb-2 text-3xl font-bold">My Requests</h1>
-        <p className="text-muted-foreground">Manage your book requests and inquiries</p>
+        <p className="text-muted-foreground">
+          Manage incoming and outgoing book requests
+        </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="sent">Sent ({sentRequests.length})</TabsTrigger>
-          <TabsTrigger value="received">Received ({receivedRequests.length})</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'received' | 'sent')}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="received">Received ({requests.length})</TabsTrigger>
+          <TabsTrigger value="sent">Sent</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="sent" className="mt-6 space-y-4">
-          {sentRequests.length === 0 ? (
+        <TabsContent value="received">
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-64 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : requests.length > 0 ? (
+            <div className="space-y-4">
+              {requests.map((request) => (
+                <RequestCard key={request.request_id} request={request} />
+              ))}
+            </div>
+          ) : (
             <Card>
-              <CardContent className="py-16 text-center">
-                <MessageCircle className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="mb-2 font-semibold">No requests sent yet</h3>
-                <p className="mb-4 text-sm text-muted-foreground">
-                  Browse books and send requests to connect with sellers
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No requests yet</h3>
+                <p className="text-muted-foreground text-center">
+                  When someone requests your books, they'll appear here
                 </p>
-                <Button asChild>
-                  <Link to="/listings">Browse Books</Link>
-                </Button>
               </CardContent>
             </Card>
-          ) : (
-            sentRequests.map((request) => (
-              <RequestCard key={request.id} request={request} type="sent" />
-            ))
           )}
         </TabsContent>
 
-        <TabsContent value="received" className="mt-6 space-y-4">
-          {receivedRequests.length === 0 ? (
+        <TabsContent value="sent">
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-64 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : requests.length > 0 ? (
+            <div className="space-y-4">
+              {requests.map((request) => (
+                <RequestCard key={request.request_id} request={request} />
+              ))}
+            </div>
+          ) : (
             <Card>
-              <CardContent className="py-16 text-center">
-                <MessageCircle className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <h3 className="mb-2 font-semibold">No requests received</h3>
-                <p className="mb-4 text-sm text-muted-foreground">
-                  List your books to start receiving requests from interested buyers
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Send className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No requests sent</h3>
+                <p className="text-muted-foreground text-center">
+                  Browse listings and request books you need
                 </p>
-                <Button asChild>
-                  <Link to="/sell">List a Book</Link>
+                <Button className="mt-4" onClick={() => window.location.href = '/listings'}>
+                  Browse Books
                 </Button>
               </CardContent>
             </Card>
-          ) : (
-            receivedRequests.map((request) => (
-              <RequestCard key={request.id} request={request} type="received" />
-            ))
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Action Dialog */}
+      <Dialog open={actionDialogOpen} onOpenChange={setActionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {actionType === 'accept' && 'Accept Request'}
+              {actionType === 'reject' && 'Reject Request'}
+              {actionType === 'cancel' && 'Cancel Request'}
+            </DialogTitle>
+            <DialogDescription>
+              {actionType === 'accept' && 'Provide meeting details to complete the request'}
+              {actionType === 'reject' && 'Let the requester know why'}
+              {actionType === 'cancel' && 'Are you sure you want to cancel this request?'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {actionType === 'accept' && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="location">Meeting Location *</Label>
+                  <Input
+                    id="location"
+                    placeholder="e.g., Library, Building A"
+                    value={meetingDetails.location}
+                    onChange={(e) => setMeetingDetails({ ...meetingDetails, location: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="time">Meeting Time *</Label>
+                  <Input
+                    id="time"
+                    type="datetime-local"
+                    value={meetingDetails.time}
+                    onChange={(e) => setMeetingDetails({ ...meetingDetails, time: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Additional Notes (optional)</Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="Any additional instructions..."
+                    rows={2}
+                    value={meetingDetails.notes}
+                    onChange={(e) => setMeetingDetails({ ...meetingDetails, notes: e.target.value })}
+                  />
+                </div>
+              </>
+            )}
+
+            {(actionType === 'reject' || actionType === 'accept') && (
+              <div className="space-y-2">
+                <Label htmlFor="message">Message (optional)</Label>
+                <Textarea
+                  id="message"
+                  placeholder="Add a message..."
+                  rows={3}
+                  value={responseMessage}
+                  onChange={(e) => setResponseMessage(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setActionDialogOpen(false);
+                resetDialogState();
+              }}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={
+                actionType === 'accept' ? handleAccept :
+                actionType === 'reject' ? handleReject :
+                handleCancel
+              }
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                actionType === 'accept' ? 'Accept Request' :
+                actionType === 'reject' ? 'Reject Request' :
+                'Cancel Request'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

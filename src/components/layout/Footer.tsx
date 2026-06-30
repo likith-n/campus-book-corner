@@ -72,7 +72,7 @@ const Footer = () => {
                 </a>
               </li>
               <li>
-                <a href="#" className="text-muted-foreground transition-colors hover:text-foreground">
+                <a href="mailto:nlikith54@gmail.com" className="text-muted-foreground transition-colors hover:text-foreground">
                   Contact Us
                 </a>
               </li>
@@ -81,7 +81,7 @@ const Footer = () => {
         </div>
 
         <div className="mt-8 border-t border-border pt-8 text-center text-sm text-muted-foreground">
-          <p>&copy; 2024 BookShare. Built for students, by students.</p>
+          <p>&copy; 2026 BookShare. Built for students, by students.</p>
         </div>
       </div>
     </footer>

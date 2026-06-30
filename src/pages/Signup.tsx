@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,8 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen } from "lucide-react";
 import { toast } from "sonner";
+import { authAPI } from "@/services/api";
 
 const Signup = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -18,7 +21,7 @@ const Signup = () => {
     location: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name || !formData.email || !formData.password) {
@@ -26,10 +29,34 @@ const Signup = () => {
       return;
     }
 
-    toast.success("Account created successfully! Welcome to BookShare.");
-    setTimeout(() => {
-      window.location.href = "/";
-    }, 1000);
+    if (formData.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const result = await authAPI.register(formData);
+      
+      if (result.success) {
+        toast.success("Account created successfully! Welcome to BookShare.");
+        
+        // Store user info
+        localStorage.setItem('user', JSON.stringify(result.data));
+        
+        // Redirect to home
+        setTimeout(() => {
+          navigate("/");
+          window.location.reload(); // Reload to update header
+        }, 1000);
+      }
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      toast.error(error.message || "Failed to create account. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -53,6 +80,7 @@ const Signup = () => {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
+                disabled={loading}
               />
             </div>
 
@@ -65,11 +93,12 @@ const Signup = () => {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
+                disabled={loading}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password *</Label>
+              <Label htmlFor="password">Password * (min 6 characters)</Label>
               <Input
                 id="password"
                 type="password"
@@ -77,13 +106,19 @@ const Signup = () => {
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 required
+                disabled={loading}
+                minLength={6}
               />
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="year">Year</Label>
-                <Select value={formData.year} onValueChange={(value) => setFormData({ ...formData, year: value })}>
+                <Select 
+                  value={formData.year} 
+                  onValueChange={(value) => setFormData({ ...formData, year: value })}
+                  disabled={loading}
+                >
                   <SelectTrigger id="year">
                     <SelectValue placeholder="Select year" />
                   </SelectTrigger>
@@ -98,7 +133,11 @@ const Signup = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="department">Department</Label>
-                <Select value={formData.department} onValueChange={(value) => setFormData({ ...formData, department: value })}>
+                <Select 
+                  value={formData.department} 
+                  onValueChange={(value) => setFormData({ ...formData, department: value })}
+                  disabled={loading}
+                >
                   <SelectTrigger id="department">
                     <SelectValue placeholder="Select dept" />
                   </SelectTrigger>
@@ -121,11 +160,12 @@ const Signup = () => {
                 placeholder="Bangalore"
                 value={formData.location}
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                disabled={loading}
               />
             </div>
 
-            <Button type="submit" className="w-full">
-              Create Account
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Creating account..." : "Create Account"}
             </Button>
           </form>
 

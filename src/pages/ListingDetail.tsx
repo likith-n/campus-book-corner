@@ -1,5 +1,4 @@
-import { useParams, Link } from "react-router-dom";
-import { mockBooks, mockUsers } from "@/data/mockData";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,16 +8,90 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { listingsAPI, requestsAPI, authAPI } from "@/services/api";
+import { getImageUrl } from "@/lib/getImageUrl";
 
 const ListingDetail = () => {
   const { id } = useParams();
-  const book = mockBooks.find((b) => b.id === id);
-  const owner = mockUsers.find((u) => u.id === book?.ownerId);
+  const navigate = useNavigate();
+  const [listing, setListing] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [requestMessage, setRequestMessage] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [sending, setSending] = useState(false);
 
-  if (!book || !owner) {
+  useEffect(() => {
+    if (id) {
+      fetchListing();
+    }
+  }, [id]);
+
+  const fetchListing = async () => {
+    try {
+      const result = await listingsAPI.getById(id!);
+      if (result.success) {
+        setListing(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch listing:', error);
+      toast.error('Failed to load listing details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestSubmit = async () => {
+    if (!requestMessage.trim()) {
+      toast.error("Please enter a message");
+      return;
+    }
+
+    if (!authAPI.isAuthenticated()) {
+      toast.error("Please login to send a request");
+      navigate('/login');
+      return;
+    }
+    
+    setSending(true);
+    try {
+      const result = await requestsAPI.create({
+        listing_id: parseInt(id!),
+        message: requestMessage
+      });
+
+      if (result.success) {
+        toast.success("Request sent! The owner will be notified.");
+        setRequestMessage("");
+        setIsDialogOpen(false);
+      }
+    } catch (error: any) {
+      console.error('Failed to send request:', error);
+      toast.error(error.message || "Failed to send request");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-16">
+        <div className="animate-pulse space-y-8">
+          <div className="h-8 w-32 bg-muted rounded" />
+          <div className="grid gap-8 lg:grid-cols-2">
+            <div className="aspect-square bg-muted rounded-lg" />
+            <div className="space-y-4">
+              <div className="h-8 w-3/4 bg-muted rounded" />
+              <div className="h-6 w-1/2 bg-muted rounded" />
+              <div className="h-12 w-1/3 bg-muted rounded" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!listing) {
     return (
       <div className="container mx-auto px-4 py-16 text-center">
         <h1 className="text-2xl font-bold">Book not found</h1>
@@ -29,21 +102,12 @@ const ListingDetail = () => {
     );
   }
 
-  const handleRequestSubmit = () => {
-    if (!requestMessage.trim()) {
-      toast.error("Please enter a message");
-      return;
-    }
-    
-    toast.success("Request sent! The owner will be notified.");
-    setRequestMessage("");
-    setIsDialogOpen(false);
-  };
-
-  const conditionColors = {
+  const conditionColors: Record<string, string> = {
     new: "bg-success text-success-foreground",
+    'like-new': "bg-green-100 text-green-800",
     good: "bg-primary text-primary-foreground",
     fair: "bg-secondary text-secondary-foreground",
+    acceptable: "bg-orange-100 text-orange-800",
   };
 
   return (
@@ -58,54 +122,89 @@ const ListingDetail = () => {
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Image Gallery */}
         <div className="space-y-4">
-          <div className="aspect-square overflow-hidden rounded-lg border border-border bg-muted">
-            <img
-              src={book.images[0]}
-              alt={book.title}
-              className="h-full w-full object-cover"
-            />
-          </div>
-          {book.images.length > 1 && (
-            <div className="grid grid-cols-4 gap-4">
-              {book.images.slice(1).map((img, idx) => (
-                <div key={idx} className="aspect-square overflow-hidden rounded-md border border-border bg-muted">
-                  <img src={img} alt={`${book.title} ${idx + 2}`} className="h-full w-full object-cover" />
+          {(() => {
+            let images: string[] = [];
+            if (listing.image_urls) {
+              try {
+                const parsed = JSON.parse(listing.image_urls);
+                images = parsed.map((url: string) => getImageUrl(url));
+              } catch {
+                images = [];
+              }
+            }
+            const mainImage = images[0] || '/placeholder.svg';
+            return (
+              <>
+                <div className="aspect-square overflow-hidden rounded-lg border border-border bg-muted">
+                  <img
+                    src={mainImage}
+                    alt={`${listing.title} cover`}
+                    className="h-full w-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
+                  />
                 </div>
-              ))}
-            </div>
-          )}
+                {images.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto">
+                    {images.map((img, idx) => (
+                      <img
+                        key={idx}
+                        src={img}
+                        alt={`${listing.title} ${idx + 1}`}
+                        className="h-20 w-20 shrink-0 rounded-md border border-border object-cover cursor-pointer hover:opacity-80"
+                        onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         {/* Book Details */}
         <div className="space-y-6">
           <div>
             <div className="mb-2 flex items-start justify-between">
-              <h1 className="text-3xl font-bold">{book.title}</h1>
-              <Badge className={conditionColors[book.condition]}>
-                {book.condition}
+              <h1 className="text-3xl font-bold">{listing.title}</h1>
+              <Badge className={conditionColors[listing.condition_type as keyof typeof conditionColors]}>
+                {listing.condition_type}
               </Badge>
             </div>
-            <p className="text-lg text-muted-foreground">{book.author}</p>
+            <p className="text-lg text-muted-foreground">{listing.author}</p>
           </div>
 
           <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-bold text-primary">₹{book.price}</span>
+            <span className="text-4xl font-bold text-primary">₹{listing.price}</span>
           </div>
 
           <div className="grid grid-cols-2 gap-4 rounded-lg border border-border bg-muted/50 p-4">
             <div>
               <p className="text-sm text-muted-foreground">Edition</p>
-              <p className="font-semibold">{book.edition}</p>
+              <p className="font-semibold">{listing.edition || 'N/A'}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Subject</p>
-              <p className="font-semibold">{book.subject}</p>
+              <p className="font-semibold">{listing.subject}</p>
             </div>
+            {listing.publisher && (
+              <div>
+                <p className="text-sm text-muted-foreground">Publisher</p>
+                <p className="font-semibold">{listing.publisher}</p>
+              </div>
+            )}
+            {listing.publication_year && (
+              <div>
+                <p className="text-sm text-muted-foreground">Year</p>
+                <p className="font-semibold">{listing.publication_year}</p>
+              </div>
+            )}
           </div>
 
           <div>
             <h2 className="mb-2 text-lg font-semibold">Description</h2>
-            <p className="text-muted-foreground">{book.description}</p>
+            <p className="text-muted-foreground">
+              {listing.description || listing.book_description || 'No description available'}
+            </p>
           </div>
 
           {/* Seller Info */}
@@ -115,29 +214,33 @@ const ListingDetail = () => {
               <div className="flex items-start gap-4">
                 <Avatar className="h-12 w-12">
                   <AvatarFallback className="bg-primary text-primary-foreground">
-                    {owner.name.split(" ").map(n => n[0]).join("")}
+                    {listing.owner_name?.split(" ").map((n: string) => n[0]).join("")}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
                   <Link 
-                    to={`/profile/${owner.id}`}
+                    to={`/profile/${listing.owner_id}`}
                     className="font-semibold hover:text-primary transition-colors"
                   >
-                    {owner.name}
+                    {listing.owner_name}
                   </Link>
                   <div className="mt-1 flex items-center gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Star className="h-4 w-4 fill-secondary text-secondary" />
-                      {owner.rating}
+                      {listing.owner_rating || 'New'}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-4 w-4" />
-                      {owner.location}
-                    </span>
+                    {listing.owner_location && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-4 w-4" />
+                        {listing.owner_location}
+                      </span>
+                    )}
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {owner.year}, {owner.department}
-                  </p>
+                  {listing.owner_year && listing.owner_department && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {listing.owner_year}, {listing.owner_department}
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -154,7 +257,7 @@ const ListingDetail = () => {
               <DialogHeader>
                 <DialogTitle>Send a Request</DialogTitle>
                 <DialogDescription>
-                  Send a message to {owner.name} about this book
+                  Send a message to {listing.owner_name} about this book
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -166,10 +269,15 @@ const ListingDetail = () => {
                     value={requestMessage}
                     onChange={(e) => setRequestMessage(e.target.value)}
                     rows={4}
+                    disabled={sending}
                   />
                 </div>
-                <Button onClick={handleRequestSubmit} className="w-full">
-                  Send Request
+                <Button 
+                  onClick={handleRequestSubmit} 
+                  className="w-full"
+                  disabled={sending}
+                >
+                  {sending ? 'Sending...' : 'Send Request'}
                 </Button>
               </div>
             </DialogContent>
@@ -177,7 +285,7 @@ const ListingDetail = () => {
 
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Calendar className="h-4 w-4" />
-            Listed on {new Date(book.createdAt).toLocaleDateString()}
+            Listed on {new Date(listing.created_at).toLocaleDateString()}
           </p>
         </div>
       </div>

@@ -2,17 +2,36 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import SearchBar from "@/components/common/SearchBar";
 import ListingCard from "@/components/common/ListingCard";
-import { mockBooks } from "@/data/mockData";
 import { ArrowRight, BookOpen, Users, Zap } from "lucide-react";
 import heroImage from "@/assets/hero-books.jpg";
+import { useState, useEffect } from "react";
+import { listingsAPI } from "@/services/api";
+import { getImageUrl } from "@/lib/getImageUrl";
 
 const Index = () => {
-  const featuredBooks = mockBooks.slice(0, 4);
+  const [featuredBooks, setFeaturedBooks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchListings = async () => {
+      try {
+        const result = await listingsAPI.getAll({ limit: 4 });
+        if (result.success) {
+          setFeaturedBooks(result.data.listings);
+        }
+      } catch (error) {
+        console.error('Failed to fetch listings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchListings();
+  }, []);
 
   const handleSearch = (query: string) => {
     console.log("Search query:", query);
     // Navigate to listings page with query
-    window.location.href = `/listings?q=${encodeURIComponent(query)}`;
+    window.location.href = `/listings?search=${encodeURIComponent(query)}`;
   };
 
   return (
@@ -107,11 +126,56 @@ const Index = () => {
             </Button>
           </div>
           
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {featuredBooks.map((book) => (
-              <ListingCard key={book.id} book={book} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-96 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : featuredBooks.length > 0 ? (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {featuredBooks.map((book) => {
+                // Parse image URLs
+                let imageUrl = '/placeholder.svg';
+                if (book.image_urls) {
+                  try {
+                    const images = JSON.parse(book.image_urls);
+                    imageUrl = getImageUrl(images[0]);
+                  } catch {
+                    imageUrl = '/placeholder.svg';
+                  }
+                }
+                
+                return (
+                  <ListingCard 
+                    key={book.listing_id} 
+                    book={{
+                      id: book.listing_id.toString(),
+                      title: book.title,
+                      author: book.author,
+                      edition: book.edition,
+                      subject: book.subject,
+                      condition: book.condition_type,
+                      price: parseFloat(book.price),
+                      description: book.listing_description || '',
+                      images: [imageUrl],
+                      ownerId: book.owner_id.toString(),
+                      ownerName: book.owner_name,
+                      ownerRating: book.owner_rating || 0,
+                      createdAt: book.created_at
+                    }} 
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No books available yet. Be the first to list one!</p>
+              <Button asChild className="mt-4">
+                <Link to="/sell">List Your First Book</Link>
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 
