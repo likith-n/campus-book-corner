@@ -107,6 +107,10 @@ router.get('/sent', authenticateToken, async (req, res) => {
         r.request_id,
         r.message,
         r.status,
+        r.meeting_location,
+        r.meeting_time,
+        r.meeting_notes,
+        r.response_message,
         r.created_at,
         r.updated_at,
         l.listing_id,
@@ -154,6 +158,10 @@ router.get('/received', authenticateToken, async (req, res) => {
         r.request_id,
         r.message,
         r.status,
+        r.meeting_location,
+        r.meeting_time,
+        r.meeting_notes,
+        r.response_message,
         r.created_at,
         r.updated_at,
         l.listing_id,
@@ -236,8 +244,8 @@ router.patch('/:id/accept', authenticateToken, async (req, res) => {
 
     // Update request status
     await pool.execute(
-      'UPDATE requests SET status = "accepted" WHERE request_id = ?',
-      [id]
+      'UPDATE requests SET status = "accepted", meeting_location = ?, meeting_time = ?, meeting_notes = ?, response_message = ? WHERE request_id = ?',
+      [req.body.meeting_location || null, req.body.meeting_time || null, req.body.meeting_notes || null, req.body.response_message || null, id]
     );
 
     // Update listing status to pending

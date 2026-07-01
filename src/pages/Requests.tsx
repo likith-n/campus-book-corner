@@ -108,10 +108,15 @@ const Requests = () => {
 
     setActionLoading(true);
     try {
-      const result = await requestsAPI.accept(selectedRequest.request_id);
+      const result = await requestsAPI.accept(selectedRequest.request_id, {
+        meeting_location: meetingDetails.location,
+        meeting_time: meetingDetails.time,
+        meeting_notes: meetingDetails.notes,
+        response_message: responseMessage
+      });
 
       if (result.success) {
-        toast.success('Request accepted! Buyer will be notified.');
+        toast.success('Request accepted! Buyer will be notified with meeting details.');
         setActionDialogOpen(false);
         fetchRequests();
         resetDialogState();
@@ -299,7 +304,27 @@ const Requests = () => {
             </div>
           )}
 
-          {/* Remove meeting details section since backend doesn't have these fields yet */}
+          {/* Meeting Details - shown to buyer when accepted */}
+          {request.status === 'accepted' && (request.meeting_location || request.meeting_time) && (
+            <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg space-y-2">
+              <p className="text-sm font-semibold text-green-800 dark:text-green-200">📅 Meeting Details</p>
+              {request.meeting_location && (
+                <p className="text-sm flex items-center gap-2">
+                  <MapPin className="h-3 w-3 text-green-600" />
+                  <span>{request.meeting_location}</span>
+                </p>
+              )}
+              {request.meeting_time && (
+                <p className="text-sm flex items-center gap-2">
+                  <Calendar className="h-3 w-3 text-green-600" />
+                  <span>{format(new Date(request.meeting_time), 'PPp')}</span>
+                </p>
+              )}
+              {request.meeting_notes && (
+                <p className="text-sm text-muted-foreground">{request.meeting_notes}</p>
+              )}
+            </div>
+          )}
 
           {/* Timestamp */}
           <p className="text-xs text-muted-foreground">

@@ -239,10 +239,10 @@ const Listings = () => {
                 }
                 
                 return (
-                  <ListingCard 
-                    key={listing.listing_id} 
-                    book={{
-                     book_id: listing.listing_id.toString(),
+                <ListingCard 
+                key={listing.listing_id} 
+                book={{
+                 id: listing.listing_id.toString(),
                       title: listing.title,
                       author: listing.author,
                       edition: listing.edition || '',
