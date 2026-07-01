@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import ProtectedRoute from "@/components/common/ProtectedRoute";
 import Index from "./pages/Index";
 import Listings from "./pages/Listings";
 import ListingDetail from "./pages/ListingDetail";
@@ -30,14 +31,14 @@ const App = () => (
           <main className="flex-1">
             <Routes>
               <Route path="/" element={<Index />} />
-              <Route path="/listings" element={<Listings />} />
-              <Route path="/listings/:id" element={<ListingDetail />} />
-              <Route path="/sell" element={<Sell />} />
-              <Route path="/requests" element={<Requests />} />
-              <Route path="/profile/:userId" element={<Profile />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              {/* Protected routes — redirect to /signup if not logged in */}
+              <Route path="/listings" element={<ProtectedRoute><Listings /></ProtectedRoute>} />
+              <Route path="/listings/:id" element={<ProtectedRoute><ListingDetail /></ProtectedRoute>} />
+              <Route path="/sell" element={<ProtectedRoute><Sell /></ProtectedRoute>} />
+              <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
+              <Route path="/profile/:userId" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
