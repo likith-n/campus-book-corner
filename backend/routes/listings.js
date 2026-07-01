@@ -294,9 +294,9 @@ router.post('/',
 
       const userId = req.user.userId;
 
-      // Build image URLs from uploaded files
+      // Build image URLs from Cloudinary uploads
       const imageUrls = req.files && req.files.length > 0
-        ? req.files.map(file => `/uploads/${file.filename}`)
+        ? req.files.map(file => file.path)  // Cloudinary returns full URL in file.path
         : [];
       const imageUrlsJson = JSON.stringify(imageUrls);
 
