@@ -190,13 +190,15 @@ const Header = () => {
             >
               My Requests
             </Link>
-            <Link
-              to="/profile/1"
-              className="block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              My Profile
-            </Link>
+            {user && (
+              <Link
+                to={`/profile/${user.user_id || user.userId}`}
+                className="block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                My Profile
+              </Link>
+            )}
           </div>
         </div>
       )}
