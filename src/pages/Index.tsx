@@ -59,12 +59,12 @@ const Index = () => {
             </div>
             <div className="mt-8 flex flex-wrap justify-center gap-4">
               <Button asChild size="lg" variant="secondary" className="gap-2">
-                <Link to="/listings">
-                  Browse Books <ArrowRight className="h-4 w-4" />
+                <Link to="/signup">
+                  Get Started Free <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/20">
-                <Link to="/sell">List Your Books</Link>
+                <Link to="/listings">Browse Books</Link>
               </Button>
             </div>
           </div>

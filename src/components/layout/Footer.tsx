@@ -1,7 +1,33 @@
-import { Link } from "react-router-dom";
-import { BookOpen } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { BookOpen, LogOut } from "lucide-react";
+import { useState, useEffect } from "react";
+import { authAPI } from "@/services/api";
+import { toast } from "sonner";
 
 const Footer = () => {
+  const [user, setUser] = useState<any>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        setUser(JSON.parse(userData));
+      } catch (e) {
+        setUser(null);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    authAPI.logout();
+    setUser(null);
+    toast.success('Logged out successfully');
+    navigate('/');
+  };
+
+  const profileLink = user ? `/profile/${user.user_id || user.userId}` : '/login';
+
   return (
     <footer className="mt-auto border-t border-border bg-card">
       <div className="container mx-auto px-4 py-12">
@@ -40,21 +66,42 @@ const Footer = () => {
           <div>
             <h3 className="mb-3 text-sm font-semibold">Account</h3>
             <ul className="space-y-2 text-sm">
-              <li>
-                <Link to="/login" className="text-muted-foreground transition-colors hover:text-foreground">
-                  Login
-                </Link>
-              </li>
-              <li>
-                <Link to="/signup" className="text-muted-foreground transition-colors hover:text-foreground">
-                  Sign Up
-                </Link>
-              </li>
-              <li>
-                <Link to="/profile/1" className="text-muted-foreground transition-colors hover:text-foreground">
-                  My Profile
-                </Link>
-              </li>
+              {user ? (
+                <>
+                  <li>
+                    <Link to={profileLink} className="text-muted-foreground transition-colors hover:text-foreground">
+                      My Profile
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/requests" className="text-muted-foreground transition-colors hover:text-foreground">
+                      My Requests
+                    </Link>
+                  </li>
+                  <li>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-1 text-muted-foreground transition-colors hover:text-destructive"
+                    >
+                      <LogOut className="h-3 w-3" />
+                      Logout
+                    </button>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <Link to="/signup" className="text-muted-foreground transition-colors hover:text-foreground">
+                      Sign Up
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/login" className="text-muted-foreground transition-colors hover:text-foreground">
+                      Login
+                    </Link>
+                  </li>
+                </>
+              )}
             </ul>
           </div>
 

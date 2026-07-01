@@ -190,14 +190,40 @@ const Header = () => {
             >
               My Requests
             </Link>
-            {user && (
-              <Link
-                to={`/profile/${user.user_id || user.userId}`}
-                className="block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                My Profile
-              </Link>
+            {user ? (
+              <>
+                <Link
+                  to={`/profile/${user.user_id || user.userId}`}
+                  className="block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  My Profile
+                </Link>
+                <button
+                  onClick={() => { handleLogout(); setMobileMenuOpen(false); }}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-muted"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/signup"
+                  className="block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Sign Up
+                </Link>
+                <Link
+                  to="/login"
+                  className="block rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Login
+                </Link>
+              </>
             )}
           </div>
         </div>
